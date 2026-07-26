@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#101116">
+<title>Camden Town Walk — standalone mobile game</title>
+<style>
+  :root { color-scheme: dark; --pink:#ff4a89; --panel:rgba(12,13,17,.82); }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; width:100%; height:100%; overflow:hidden; background:#101116; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  body { touch-action:none; overscroll-behavior:none; }
+  #game { position:fixed; inset:0; width:100%; height:100%; display:block; image-rendering:pixelated; background:#718091; }
+  #hud { position:fixed; inset:0; pointer-events:none; color:#fff; text-shadow:0 2px 4px #000; }
+  #place { position:absolute; top:max(12px,env(safe-area-inset-top)); left:50%; transform:translateX(-50%); max-width:72vw; padding:7px 12px; border:1px solid rgba(255,255,255,.22); border-radius:999px; background:rgba(0,0,0,.52); backdrop-filter:blur(7px); font-size:12px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  #objective { position:absolute; top:max(50px,calc(env(safe-area-inset-top) + 38px)); left:50%; transform:translateX(-50%); max-width:82vw; font-size:11px; text-align:center; opacity:.85; }
+  #crosshair { position:absolute; left:50%; top:50%; width:10px; height:10px; transform:translate(-50%,-50%); opacity:.55; }
+  #crosshair:before,#crosshair:after { content:""; position:absolute; background:#fff; border-radius:2px; }
+  #crosshair:before { width:10px; height:2px; left:0; top:4px; }
+  #crosshair:after { width:2px; height:10px; left:4px; top:0; }
+  #fps { position:absolute; left:max(8px,env(safe-area-inset-left)); top:max(8px,env(safe-area-inset-top)); font-size:10px; opacity:.45; }
+  #miniWrap { position:fixed; right:max(9px,env(safe-area-inset-right)); top:max(54px,calc(env(safe-area-inset-top) + 44px)); z-index:6; width:126px; padding:5px; background:rgba(5,6,8,.68); border:1px solid rgba(255,255,255,.2); border-radius:12px; backdrop-filter:blur(7px); box-shadow:0 5px 18px rgba(0,0,0,.3); }
+  #mini { display:block; width:116px; height:154px; border-radius:8px; }
+  #miniLabel { margin-top:3px; text-align:center; color:rgba(255,255,255,.7); font-size:9px; letter-spacing:.08em; text-transform:uppercase; }
+  #utility { position:fixed; z-index:8; left:max(10px,env(safe-area-inset-left)); top:max(42px,calc(env(safe-area-inset-top) + 32px)); display:flex; gap:7px; }
+  .smallButton { pointer-events:auto; appearance:none; border:1px solid rgba(255,255,255,.22); border-radius:999px; background:rgba(0,0,0,.52); color:#fff; padding:7px 10px; font:700 11px system-ui; backdrop-filter:blur(7px); }
+  #touch { position:fixed; inset:0; z-index:5; display:none; pointer-events:none; }
+  #joystick { position:absolute; left:max(17px,env(safe-area-inset-left)); bottom:max(19px,env(safe-area-inset-bottom)); width:118px; height:118px; border-radius:50%; border:1px solid rgba(255,255,255,.24); background:rgba(0,0,0,.18); box-shadow:inset 0 0 30px rgba(0,0,0,.18); pointer-events:auto; touch-action:none; }
+  #stick { position:absolute; left:36px; top:36px; width:46px; height:46px; border-radius:50%; background:rgba(255,255,255,.34); border:1px solid rgba(255,255,255,.5); }
+  #lookZone { position:absolute; right:0; top:0; width:62%; height:100%; pointer-events:auto; touch-action:none; }
+  #run { position:absolute; right:max(19px,env(safe-area-inset-right)); bottom:max(25px,env(safe-area-inset-bottom)); width:68px; height:68px; border:1px solid rgba(255,255,255,.28); border-radius:50%; background:rgba(255,74,137,.78); color:#fff; font:900 12px system-ui; pointer-events:auto; touch-action:none; box-shadow:0 8px 24px rgba(0,0,0,.28); }
+  #start { position:fixed; inset:0; z-index:20; display:grid; place-items:center; padding:18px; overflow:auto; background:radial-gradient(circle at 50% 28%,rgba(155,35,88,.42),rgba(4,5,8,.96) 58%); color:#fff; touch-action:pan-y; }
+  #card { width:min(560px,100%); padding:23px; border:1px solid rgba(255,255,255,.17); border-radius:20px; background:rgba(12,13,17,.88); backdrop-filter:blur(15px); box-shadow:0 28px 70px rgba(0,0,0,.48); }
+  h1 { margin:0; font-size:clamp(33px,10vw,64px); line-height:.88; letter-spacing:-.06em; }
+  h1 span { display:block; color:var(--pink); }
+  #card p { margin:14px 0; color:rgba(255,255,255,.77); font-size:14px; line-height:1.45; }
+  #facts { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:16px 0; }
+  .fact { padding:10px; border-radius:11px; background:rgba(255,255,255,.055); font-size:12px; line-height:1.35; color:rgba(255,255,255,.76); }
+  .fact b { display:block; color:#fff; margin-bottom:2px; }
+  #enter { width:100%; appearance:none; cursor:pointer; touch-action:manipulation; border:0; border-radius:999px; padding:14px 18px; background:var(--pink); color:#1a0710; font:900 16px system-ui; }
+  #disclaimer { margin-top:11px; text-align:center; font-size:10px; line-height:1.35; color:rgba(255,255,255,.48); }
+  #error { display:none; margin-top:12px; padding:10px; border-radius:10px; background:#5e1d28; color:#fff; font-size:12px; }
+  @media (pointer:coarse) { #touch.active { display:block; } #crosshair { opacity:.35; } #fps { display:none; } }
+  @media (max-width:430px) { #miniWrap { width:103px; } #mini { width:93px; height:125px; } #facts { grid-template-columns:1fr; } #card { padding:19px; } }
+  @media (max-height:520px) { #card { padding:16px; } #card p { margin:8px 0; } #facts { margin:9px 0; } .fact { padding:7px; } #miniWrap { top:45px; } }
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="A stylised first-person walk through Camden Town"></canvas>
+<div id="hud">
+  <div id="place">Camden Town Station</div>
+  <div id="objective">Walk north along Camden High Street towards the canal</div>
+  <div id="crosshair"></div>
+  <div id="fps"></div>
+</div>
+<div id="utility">
+  <button class="smallButton" id="mapButton" type="button">Map</button>
+  <button class="smallButton" id="resetButton" type="button">Reset</button>
+</div>
+<div id="miniWrap">
+  <canvas id="mini" width="174" height="231" aria-label="Schematic Camden route map"></canvas>
+  <div id="miniLabel">schematic north ↑</div>
+</div>
+<div id="touch">
+  <div id="joystick"><div id="stick"></div></div>
+  <div id="lookZone"></div>
+  <button id="run" type="button">RUN</button>
+</div>
+<div id="start">
+  <div id="card">
+    <h1>CAMDEN <span>TOWN WALK</span></h1>
+    <p>A single-file, offline-friendly browser wander. The street network follows Camden Town’s real broad layout: the station junction, Camden High Street, Regent’s Canal and lock, Chalk Farm Road, the Stables and the Roundhouse.</p>
+    <div id="facts">
+      <div class="fact"><b>Mobile</b>Left thumb walks. Drag the right side to look. Hold RUN to leg it.</div>
+      <div class="fact"><b>Desktop too</b>WASD or arrow keys, mouse-look and Shift.</div>
+      <div class="fact"><b>One HTML file</b>No Python, no server, no downloads and no external libraries.</div>
+      <div class="fact"><b>Geography</b>Schematic rather than a building-for-building scan, but the main places sit in the right relationships.</div>
+    </div>
+    <button id="enter" type="button">Start at Camden Town station</button>
+    <div id="disclaimer">An original low-resolution interpretation, not a navigation map. If Start does nothing, the file is open in a document preview that blocks JavaScript; open it in a browser or an HTML viewer instead.</div>
+    <div id="error"></div>
+  </div>
+</div>
+<script>
+(() => {
+'use strict';
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d', { alpha:false });
+const mini = document.getElementById('mini');
+const mctx = mini.getContext('2d');
+const placeEl = document.getElementById('place');
+const objectiveEl = document.getElementById('objective');
+const fpsEl = document.getElementById('fps');
+const startEl = document.getElementById('start');
+const errorEl = document.getElementById('error');
+const touchEl = document.getElementById('touch');
+const isTouch = matchMedia('(pointer:coarse)').matches || navigator.maxTouchPoints > 0;
+
+if (!ctx || !mctx) {
+  errorEl.style.display = 'block';
+  errorEl.textContent = 'This browser did not provide a canvas renderer.';
+  return;
+}
+
+const MW = 96, MH = 128;
+const wall = new Uint8Array(MW * MH);
+const floor = new Uint8Array(MW * MH);
+const blockedFloor = new Set([4]);
+const idx = (x,y) => y * MW + x;
+const inMap = (x,y) => x >= 0 && y >= 0 && x < MW && y < MH;
+for (let y=0;y<MH;y++) for (let x=0;x<MW;x++) wall[idx(x,y)] = (x===0||y===0||x===MW-1||y===MH-1) ? 2 : 1;
+
+function disc(cx,cy,r,f=2) {
+  const minX=Math.floor(cx-r), maxX=Math.ceil(cx+r), minY=Math.floor(cy-r), maxY=Math.ceil(cy+r);
+  for (let y=minY;y<=maxY;y++) for (let x=minX;x<=maxX;x++) {
+    if (!inMap(x,y)) continue;
+    if ((x-cx)*(x-cx)+(y-cy)*(y-cy) <= r*r) { wall[idx(x,y)]=0; floor[idx(x,y)]=f; }
+  }
+}
+function line(a,b,r,f=2) {
+  const dx=b[0]-a[0], dy=b[1]-a[1], steps=Math.max(1,Math.ceil(Math.hypot(dx,dy)*2));
+  for (let i=0;i<=steps;i++) disc(a[0]+dx*i/steps,a[1]+dy*i/steps,r,f);
+}
+function road(points,outer=6.2,inner=3.45) {
+  for (let i=0;i<points.length-1;i++) line(points[i],points[i+1],outer,2);
+  for (let i=0;i<points.length-1;i++) line(points[i],points[i+1],inner,1);
+}
+function rect(x0,y0,x1,y1,f=3) {
+  for (let y=Math.floor(y0);y<=Math.ceil(y1);y++) for (let x=Math.floor(x0);x<=Math.ceil(x1);x++) if(inMap(x,y)){wall[idx(x,y)]=0;floor[idx(x,y)]=f;}
+}
+function wallRect(x0,y0,x1,y1,type) {
+  for (let y=Math.floor(y0);y<=Math.ceil(y1);y++) for (let x=Math.floor(x0);x<=Math.ceil(x1);x++) if(inMap(x,y)&&wall[idx(x,y)]!==0) wall[idx(x,y)]=type;
+}
+
+// Broad geographic skeleton, south at the bottom and north at the top.
+const highStreet = [[49,116],[49,99],[49,82],[49,66],[48,57],[47,51],[44,43],[40,32],[36,20],[33,8]];
+road(highStreet,6.4,3.55);
+road([[49,101],[32,101],[15,100]],5.5,3.0);                 // Parkway west
+road([[49,101],[66,96],[82,91]],5.4,3.0);                  // Kentish Town Road east
+road([[49,84],[34,84],[21,84]],4.2,2.2);                   // Inverness Street
+road([[48,66],[34,65],[20,63]],4.1,2.1);                   // Jamestown Road
+road([[46,55],[35,54],[22,52]],3.7,1.9);                   // Camden Lock Place
+road([[53,68],[66,64],[75,55],[74,44]],4.5,2.4);           // Hawley Crescent
+road([[39,32],[26,31],[17,28]],4.2,2.1);                   // Stables approach
+road([[34,12],[25,12],[18,9]],4.0,2.0);                    // Roundhouse approach
+
+// Market courtyards and useful wanderable pockets.
+rect(20,45,39,57,3);  line([39,52],[45,52],2.3,3);         // Camden Lock / West Yard
+rect(54,43,72,57,3);  line([51,52],[57,52],2.2,3);         // Hawley Wharf
+rect(18,22,35,38,3);  line([34,31],[39,31],2.0,3);         // Stables Market
+rect(17,6,31,16,3);   line([30,12],[34,12],2.0,3);         // Roundhouse forecourt
+rect(21,80,34,89,3);  line([34,84],[43,84],1.8,3);         // Inverness pocket
+
+// Regent's Canal, roughly east-west, with Camden Lock bridge retained.
+for (let y=47;y<=52;y++) for (let x=1;x<MW-1;x++) { wall[idx(x,y)]=0; floor[idx(x,y)]=4; }
+for (let x=1;x<MW-1;x++) { wall[idx(x,46)]=0; floor[idx(x,46)]=2; wall[idx(x,53)]=0; floor[idx(x,53)]=2; }
+rect(42,45,51,54,5);                                           // main road bridge
+rect(25,45,29,54,5);                                           // little market footbridge
+
+// Small grass/rail-edge areas.
+rect(5,17,14,38,6);
+rect(76,24,90,42,6);
+
+// Landmark facade zones. Only solid cells are recoloured.
+wallRect(38,108,46,123,5);                                     // station
+wallRect(53,95,62,108,7);                                      // World's End-ish corner
+wallRect(38,82,44,94,8);                                       // Electric Ballroom
+wallRect(14,44,22,59,4);                                       // Lock market brick
+wallRect(18,18,37,41,4);                                       // Stables
+wallRect(52,39,75,60,6);                                       // Hawley Wharf
+wallRect(14,3,33,18,9);                                        // Roundhouse
+wallRect(29,1,39,7,5);                                         // Chalk Farm station
+
+// Colourful high-street shop fronts along the edges.
+for (let y=58;y<98;y+=7) {
+  for (let x=39;x<=42;x++) if (wall[idx(x,y)]) wall[idx(x,y)] = 3 + ((y/7|0)%3);
+  for (let x=55;x<=58;x++) if (wall[idx(x,y)]) wall[idx(x,y)] = 3 + (((y/7|0)+1)%3);
+}
+
+const palette = {
+  skyTop:[91,108,128], skyBottom:[175,179,180],
+  walls:{
+    1:[116,82,65], 2:[43,45,49], 3:[111,53,76], 4:[86,67,53], 5:[31,33,38],
+    6:[181,143,68], 7:[75,52,48], 8:[54,50,65], 9:[87,74,64]
+  }
+};
+
+const player = { x:49, y:113.5, angle:-Math.PI/2, pitch:0, radius:.23 };
+let running=false, active=false, last=performance.now(), fpsClock=0, fpsCount=0;
+let renderW=320, renderH=200, zBuffer=new Float32Array(renderW);
+const keys=new Set();
+const FOV=Math.PI/3;
+
+function resize() {
+  const scale = innerWidth < 500 ? 0.62 : 0.72;
+  renderW = Math.max(220, Math.min(480, Math.floor(innerWidth * scale)));
+  renderH = Math.max(180, Math.min(560, Math.floor(innerHeight * scale)));
+  canvas.width=renderW; canvas.height=renderH;
+  zBuffer=new Float32Array(renderW);
+}
+addEventListener('resize',resize,{passive:true}); resize();
+
+function mix(a,b,t){return a+(b-a)*t;}
+function shade(rgb,s){return `rgb(${Math.max(0,rgb[0]*s)|0},${Math.max(0,rgb[1]*s)|0},${Math.max(0,rgb[2]*s)|0})`;}
+function floorColour(type,wx,wy,dist,time) {
+  let rgb;
+  if (type===1) {
+    const fleck=((Math.floor(wx*2)+Math.floor(wy*2))&3)===0 ? 7 : 0;
+    rgb=[54+fleck,56+fleck,58+fleck];
+  } else if (type===2) {
+    const slab=((Math.floor(wx*1.4)+Math.floor(wy*1.4))&1)*8;
+    rgb=[112+slab,111+slab,108+slab];
+  } else if (type===3) {
+    const cobble=((Math.floor(wx*2)+Math.floor(wy*2))&1)*10;
+    rgb=[91+cobble,78+cobble,71+cobble];
+  } else if (type===4) {
+    const wave=Math.sin(wx*1.8+time*.0018)+Math.sin(wy*2.4-time*.0012);
+    rgb=[37+wave*5,88+wave*7,99+wave*9];
+  } else if (type===5) rgb=[70,72,73];
+  else if (type===6) {
+    const speck=((Math.floor(wx*3)+Math.floor(wy*3))&3)*3;
+    rgb=[63+speck,91+speck,59+speck];
+  } else rgb=[72,72,72];
+  const fog=Math.min(.76,dist/42);
+  return `rgb(${mix(rgb[0],145,fog)|0},${mix(rgb[1],151,fog)|0},${mix(rgb[2],158,fog)|0})`;
+}
+
+function renderFloor(dirX,dirY,planeX,planeY,horizon,time) {
+  const half=renderH*.5;
+  const start=Math.max(0,Math.floor(horizon));
+  for (let sy=start;sy<renderH;sy++) {
+    const p=sy-horizon;
+    if (p<1) continue;
+    const rowDist=half/p;
+    const ray0x=dirX-planeX, ray0y=dirY-planeY;
+    const ray1x=dirX+planeX, ray1y=dirY+planeY;
+    let fx=player.x+rowDist*ray0x;
+    let fy=player.y+rowDist*ray0y;
+    const stepX=rowDist*(ray1x-ray0x)/renderW;
+    const stepY=rowDist*(ray1y-ray0y)/renderW;
+    let runStart=0, lastColour='';
+    for (let sx=0;sx<=renderW;sx++) {
+      let colour;
+      if (sx===renderW) colour='__end';
+      else {
+        const mx=Math.floor(fx), my=Math.floor(fy);
+        const ft=inMap(mx,my) ? floor[idx(mx,my)] : 0;
+        colour=floorColour(ft,fx,fy,rowDist,time);
+        fx+=stepX; fy+=stepY;
+      }
+      if (sx===0) lastColour=colour;
+      if (colour!==lastColour) {
+        ctx.fillStyle=lastColour;
+        ctx.fillRect(runStart,sy,sx-runStart,1);
+        runStart=sx; lastColour=colour;
+      }
+    }
+  }
+}
+
+function drawSky(horizon) {
+  const grad=ctx.createLinearGradient(0,0,0,Math.max(1,horizon));
+  grad.addColorStop(0,`rgb(${palette.skyTop.join(',')})`);
+  grad.addColorStop(1,`rgb(${palette.skyBottom.join(',')})`);
+  ctx.fillStyle=grad; ctx.fillRect(0,0,renderW,Math.max(1,horizon));
+  const sunX=renderW*.17, sunY=Math.max(18,horizon*.28);
+  ctx.fillStyle='rgba(255,231,183,.55)'; ctx.beginPath(); ctx.arc(sunX,sunY,Math.max(4,renderW*.012),0,Math.PI*2); ctx.fill();
+}
+
+function renderWalls(dirX,dirY,planeX,planeY,horizon) {
+  for (let x=0;x<renderW;x++) {
+    const cameraX=2*x/renderW-1;
+    const rayX=dirX+planeX*cameraX, rayY=dirY+planeY*cameraX;
+    let mapX=Math.floor(player.x), mapY=Math.floor(player.y);
+    const ddx=Math.abs(1/(rayX||1e-9)), ddy=Math.abs(1/(rayY||1e-9));
+    let stepX,stepY,sideX,sideY;
+    if(rayX<0){stepX=-1;sideX=(player.x-mapX)*ddx;}else{stepX=1;sideX=(mapX+1-player.x)*ddx;}
+    if(rayY<0){stepY=-1;sideY=(player.y-mapY)*ddy;}else{stepY=1;sideY=(mapY+1-player.y)*ddy;}
+    let side=0, hit=0, type=2;
+    for(let guard=0;guard<180&&!hit;guard++){
+      if(sideX<sideY){sideX+=ddx;mapX+=stepX;side=0;}else{sideY+=ddy;mapY+=stepY;side=1;}
+      if(!inMap(mapX,mapY)){hit=1;type=2;break;}
+      type=wall[idx(mapX,mapY)]; if(type) hit=1;
+    }
+    let dist=side===0 ? (mapX-player.x+(1-stepX)/2)/(rayX||1e-9) : (mapY-player.y+(1-stepY)/2)/(rayY||1e-9);
+    dist=Math.max(.04,dist); zBuffer[x]=dist;
+    const heightFactor=type===9?1.34:type===5?1.12:type===4?1.08:1;
+    const lineH=Math.floor(renderH/dist*heightFactor);
+    const start=Math.floor(horizon-lineH*.5), end=Math.floor(horizon+lineH*.5);
+    const base=palette.walls[type]||palette.walls[1];
+    let fog=Math.min(.72,dist/45), sideShade=side?0.78:0.94;
+    const lit=[mix(base[0],145,fog),mix(base[1],151,fog),mix(base[2],158,fog)];
+    ctx.fillStyle=shade(lit,sideShade); ctx.fillRect(x,Math.max(0,start),1,Math.min(renderH,end)-Math.max(0,start));
+
+    let wallX=side===0 ? player.y+dist*rayY : player.x+dist*rayX; wallX-=Math.floor(wallX);
+    const h=end-start;
+    // Brick courses and facade detail.
+    if ((type===1||type===4||type===7||type===9) && dist<31) {
+      const mortarEvery=Math.max(3,Math.floor(h/9));
+      ctx.fillStyle=`rgba(30,25,22,${Math.max(.08,.31-dist*.007)})`;
+      for(let yy=start+(x%2)*2;yy<end;yy+=mortarEvery) if(yy>=0&&yy<renderH) ctx.fillRect(x,yy,1,1);
+    }
+    if ((type===3||type===4||type===6||type===7||type===8) && dist<24) {
+      const rel=(x%37)/37;
+      const signTop=start+h*.56, signBottom=start+h*.70;
+      if(signTop<renderH&&signBottom>0){
+        if(type===3) ctx.fillStyle=rel<.5?'#cb3e76':'#f2c94c';
+        else if(type===6) ctx.fillStyle='#d3a442';
+        else if(type===8) ctx.fillStyle='#672c85';
+        else ctx.fillStyle='#242529';
+        ctx.fillRect(x,Math.max(0,signTop|0),1,Math.max(1,(signBottom-signTop)|0));
+      }
+      const winTop=start+h*.20, winBottom=start+h*.43;
+      if(winTop<renderH&&winBottom>0&&((wallX*8)|0)%2===0){ctx.fillStyle='rgba(29,44,57,.82)';ctx.fillRect(x,Math.max(0,winTop|0),1,Math.max(1,(winBottom-winTop)|0));}
+    }
+    if(type===5 && dist<26) { // station-style red/white band
+      const band=start+h*.55; ctx.fillStyle='#e9e4d8'; ctx.fillRect(x,band|0,1,Math.max(2,h*.09|0));
+      if(((x/3)|0)%5===0){ctx.fillStyle='#d92e55';ctx.fillRect(x,(band-h*.015)|0,1,Math.max(3,h*.12|0));}
+    }
+  }
+}
+
+function makeLabel(text,fg='#fff',bg='rgba(18,18,20,.88)',border='#ff4a89') {
+  const c=document.createElement('canvas'), cx=c.getContext('2d'); c.width=512;c.height=128;
+  cx.clearRect(0,0,c.width,c.height); cx.fillStyle=bg; cx.roundRect(7,7,498,114,18); cx.fill();
+  cx.strokeStyle=border;cx.lineWidth=7;cx.stroke(); cx.fillStyle=fg;cx.font='900 48px Arial, sans-serif';cx.textAlign='center';cx.textBaseline='middle';cx.fillText(text,256,67);
+  return c;
+}
+function makePerson(colour='#7f3156') {
+  const c=document.createElement('canvas'), cx=c.getContext('2d');c.width=96;c.height=192;
+  cx.fillStyle='rgba(0,0,0,.23)';cx.beginPath();cx.ellipse(48,181,28,7,0,0,Math.PI*2);cx.fill();
+  cx.fillStyle='#c58d69';cx.beginPath();cx.arc(48,30,20,0,Math.PI*2);cx.fill();
+  cx.fillStyle=colour;cx.beginPath();cx.roundRect(23,51,50,90,22);cx.fill();
+  cx.fillStyle='#25262b';cx.fillRect(27,132,17,47);cx.fillRect(53,132,17,47);
+  return c;
+}
+function makeBus() {
+  const c=document.createElement('canvas'),cx=c.getContext('2d');c.width=180;c.height=260;
+  cx.fillStyle='rgba(0,0,0,.25)';cx.beginPath();cx.ellipse(90,246,73,10,0,0,Math.PI*2);cx.fill();
+  cx.fillStyle='#c82138';cx.roundRect(23,35,134,205,18);cx.fill();
+  cx.fillStyle='#172331';cx.fillRect(32,51,116,63);cx.fillRect(32,126,116,55);
+  cx.fillStyle='#f0ddad';cx.fillRect(57,188,66,22);cx.fillStyle='#111';cx.font='900 17px Arial';cx.textAlign='center';cx.fillText('24',90,205);
+  cx.fillStyle='#222';cx.beginPath();cx.arc(50,238,13,0,Math.PI*2);cx.arc(130,238,13,0,Math.PI*2);cx.fill();
+  return c;
+}
+const labels=[
+  {x:43.0,y:118.0,img:makeLabel('CAMDEN TOWN'),scale:1.0,z:.25,range:22},
+  {x:56.0,y:99.0,img:makeLabel("WORLD'S END",'#f7e6b0','rgba(40,25,20,.9)','#c79245'),scale:.92,z:.28,range:20},
+  {x:42.0,y:88.0,img:makeLabel('ELECTRIC BALLROOM','#fff','rgba(27,20,31,.9)','#a768d1'),scale:1,z:.25,range:21},
+  {x:47.0,y:49.7,img:makeLabel('CAMDEN LOCK','#ffe46b','rgba(31,67,73,.93)','#ebd05c'),scale:1.25,z:.65,range:30},
+  {x:29.0,y:51.0,img:makeLabel('LOCK MARKET','#fff0ca','rgba(36,30,26,.92)','#d14a76'),scale:.96,z:.25,range:22},
+  {x:62.0,y:49.0,img:makeLabel('HAWLEY WHARF','#fff','rgba(135,95,28,.92)','#f2d076'),scale:.94,z:.25,range:22},
+  {x:27.0,y:30.0,img:makeLabel('STABLES MARKET','#f4e2b8','rgba(41,34,29,.94)','#c78b53'),scale:1.05,z:.25,range:24},
+  {x:24.0,y:10.0,img:makeLabel('ROUNDHOUSE','#fff','rgba(41,37,35,.94)','#d7c3a2'),scale:1.0,z:.32,range:24},
+  {x:34.0,y:4.8,img:makeLabel('CHALK FARM'),scale:.82,z:.22,range:18}
+];
+const personImgs=['#8b315c','#315f82','#4f7c52','#6f5137','#33343a'].map(makePerson);
+const people=[];
+for(let i=0;i<15;i++) people.push({x:44+(i%2)*10+(i%3)*.7,y:106-i*6.1,img:personImgs[i%personImgs.length],scale:.62,z:-.18,phase:i*.8,range:27});
+const bus={x:51.2,y:91,img:makeBus(),scale:1.4,z:-.1,range:35};
+
+function renderSprite(sprite,dirX,dirY,planeX,planeY,horizon) {
+  const sx=sprite.x-player.x, sy=sprite.y-player.y;
+  const dist=Math.hypot(sx,sy); if(dist>(sprite.range||30)||dist<.3)return;
+  const inv=1/(planeX*dirY-dirX*planeY);
+  const tx=inv*(dirY*sx-dirX*sy), ty=inv*(-planeY*sx+planeX*sy);
+  if(ty<=.12)return;
+  const screenX=(renderW/2)*(1+tx/ty);
+  let h=Math.abs(renderH/ty)*(sprite.scale||1);
+  const aspect=sprite.img.width/sprite.img.height;
+  if (aspect > 2.5) h=Math.min(h,Math.max(30,renderH*.14));
+  const w=h*aspect;
+  const vertical=(sprite.z||0)*h;
+  const y0=horizon-h*.5-vertical, x0=screenX-w*.5;
+  const start=Math.max(0,Math.floor(x0)),end=Math.min(renderW-1,Math.ceil(x0+w));
+  for(let stripe=start;stripe<=end;stripe++) {
+    if(ty>=zBuffer[stripe])continue;
+    const u=Math.floor((stripe-x0)/w*sprite.img.width); if(u<0||u>=sprite.img.width)continue;
+    ctx.drawImage(sprite.img,u,0,1,sprite.img.height,stripe,y0,1,h);
+  }
+}
+function renderSprites(dirX,dirY,planeX,planeY,horizon,time) {
+  const sprites=[];
+  for(const p of people){ const q={...p}; q.x=p.x+Math.sin(time*.00035+p.phase)*1.3; q.y=p.y+Math.cos(time*.00025+p.phase)*1.8; sprites.push(q); }
+  bus.y=104-((time*.0032)%64); bus.x=51.6+Math.sin(time*.0004)*.4; sprites.push(bus);
+  sprites.push(...labels);
+  sprites.sort((a,b)=>((b.x-player.x)**2+(b.y-player.y)**2)-((a.x-player.x)**2+(a.y-player.y)**2));
+  for(const s of sprites) renderSprite(s,dirX,dirY,planeX,planeY,horizon);
+}
+
+function render(time) {
+  const dirX=Math.cos(player.angle),dirY=Math.sin(player.angle);
+  const planeLen=Math.tan(FOV/2),planeX=-dirY*planeLen,planeY=dirX*planeLen;
+  const horizon=renderH*.50+player.pitch*renderH*.38;
+  ctx.clearRect(0,0,renderW,renderH);
+  drawSky(horizon); renderFloor(dirX,dirY,planeX,planeY,horizon,time); renderWalls(dirX,dirY,planeX,planeY,horizon); renderSprites(dirX,dirY,planeX,planeY,horizon,time);
+  // Subtle distance haze and vignette.
+  const vg=ctx.createRadialGradient(renderW*.5,renderH*.48,renderH*.12,renderW*.5,renderH*.48,Math.max(renderW,renderH)*.7);
+  vg.addColorStop(.65,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.23)');ctx.fillStyle=vg;ctx.fillRect(0,0,renderW,renderH);
+}
+
+function collision(x,y) {
+  const r=player.radius;
+  const points=[[x-r,y-r],[x+r,y-r],[x-r,y+r],[x+r,y+r]];
+  for(const p of points){const mx=Math.floor(p[0]),my=Math.floor(p[1]);if(!inMap(mx,my))return true;const i=idx(mx,my);if(wall[i]||blockedFloor.has(floor[i]))return true;}
+  return false;
+}
+let joyX=0,joyY=0;
+function update(dt) {
+  let forward=0,strafe=0;
+  if(keys.has('KeyW')||keys.has('ArrowUp'))forward+=1;
+  if(keys.has('KeyS')||keys.has('ArrowDown'))forward-=1;
+  if(keys.has('KeyA')||keys.has('ArrowLeft'))strafe-=1;
+  if(keys.has('KeyD')||keys.has('ArrowRight'))strafe+=1;
+  if(isTouch){strafe+=joyX;forward-=joyY;}
+  const len=Math.hypot(forward,strafe); if(len>1){forward/=len;strafe/=len;}
+  const speed=(running?5.2:3.05)*dt;
+  const dx=(Math.cos(player.angle)*forward+Math.cos(player.angle+Math.PI/2)*strafe)*speed;
+  const dy=(Math.sin(player.angle)*forward+Math.sin(player.angle+Math.PI/2)*strafe)*speed;
+  if(!collision(player.x+dx,player.y))player.x+=dx;
+  if(!collision(player.x,player.y+dy))player.y+=dy;
+  updatePlace();
+}
+function updatePlace(){
+  const x=player.x,y=player.y; let p='Camden High Street',o='Keep heading north towards Regent’s Canal';
+  if(y>105){p='Camden Town Station';o='Walk north along Camden High Street towards the canal';}
+  else if(y>94&&x<40){p='Parkway';o='Turn back east for Camden Town station, or explore west';}
+  else if(y>90&&x>59){p='Kentish Town Road';o='Head west to the station junction';}
+  else if(y>79&&x<39){p='Inverness Street';o='Return east to Camden High Street';}
+  else if(y>76){p='Camden High Street — Electric Ballroom';o='Continue north towards Camden Lock';}
+  else if(y>59&&x<39){p='Jamestown Road';o='The canal and market are north-east';}
+  else if(y>57){p='Camden High Street';o='The Camden Lock bridge is just ahead';}
+  else if(y>=46&&y<=54&&x>40&&x<53){p='Camden Lock Bridge';o='Cross Regent’s Canal into Chalk Farm Road';}
+  else if(y>=44&&y<=58&&x<40){p='Camden Lock Market';o='Explore the market courtyard or rejoin the high street';}
+  else if(y>=42&&y<=59&&x>53){p='Hawley Wharf';o='Return west to Camden High Street';}
+  else if(y<44&&y>36){p='Chalk Farm Road';o='Keep north-west for the Stables Market';}
+  else if(y<=39&&y>=20&&x<37){p='Stables Market';o='Continue north towards the Roundhouse';}
+  else if(y<20&&x<32){p='The Roundhouse';o='Chalk Farm station is just north-east';}
+  else if(y<9){p='Chalk Farm Station';o='You reached the northern end — wander back through Camden';}
+  else if(y<45){p='Chalk Farm Road';o='The Stables and Roundhouse are further north';}
+  placeEl.textContent=p;objectiveEl.textContent=o;
+}
+
+function drawMini() {
+  const w=mini.width,h=mini.height,s=Math.min(w/MW,h/MH),ox=(w-MW*s)/2,oy=(h-MH*s)/2;
+  mctx.fillStyle='#15171b';mctx.fillRect(0,0,w,h);
+  for(let y=0;y<MH;y+=2)for(let x=0;x<MW;x+=2){const i=idx(x,y);let c=null;if(wall[i])c='#3a3331';else{const f=floor[i];c=f===1?'#56595d':f===2?'#898886':f===3?'#765e51':f===4?'#2f6b78':f===5?'#626568':f===6?'#476443':'#666';}mctx.fillStyle=c;mctx.fillRect(ox+x*s,oy+y*s,Math.max(1,s*2+.3),Math.max(1,s*2+.3));}
+  const marks=[['CT',49,112],['Lock',47,50],['Stables',27,30],['R',24,10]];
+  mctx.font='bold 11px system-ui';mctx.textAlign='center';mctx.textBaseline='middle';
+  for(const [t,x,y] of marks){mctx.fillStyle='rgba(0,0,0,.7)';mctx.fillRect(ox+x*s-15,oy+y*s-7,30,14);mctx.fillStyle='#fff';mctx.fillText(t,ox+x*s,oy+y*s);}
+  const px=ox+player.x*s,py=oy+player.y*s;mctx.save();mctx.translate(px,py);mctx.rotate(player.angle+Math.PI/2);mctx.fillStyle='#ff4a89';mctx.beginPath();mctx.moveTo(0,-8);mctx.lineTo(6,7);mctx.lineTo(0,4);mctx.lineTo(-6,7);mctx.closePath();mctx.fill();mctx.restore();
+}
+
+function reset(){player.x=49;player.y=113.5;player.angle=-Math.PI/2;player.pitch=0;updatePlace();}
+document.getElementById('resetButton').addEventListener('click',reset);
+document.getElementById('mapButton').addEventListener('click',()=>{const w=document.getElementById('miniWrap');w.hidden=!w.hidden;});
+
+const enterButton=document.getElementById('enter');
+let starting=false;
+function startGame(e){
+  if(e){e.preventDefault();e.stopPropagation();}
+  if(starting)return;
+  starting=true;active=true;startEl.style.display='none';
+  if(isTouch)touchEl.classList.add('active');
+  else canvas.requestPointerLock?.();
+  setTimeout(()=>{starting=false;},250);
+}
+enterButton.addEventListener('click',startGame,{passive:false});
+enterButton.addEventListener('pointerup',startGame,{passive:false});
+enterButton.addEventListener('touchend',startGame,{passive:false});
+canvas.addEventListener('click',()=>{if(active&&!isTouch&&document.pointerLockElement!==canvas)canvas.requestPointerLock?.();});
+document.addEventListener('pointerlockchange',()=>{if(!isTouch&&active&&document.pointerLockElement!==canvas)startEl.style.display='grid';});
+document.addEventListener('mousemove',e=>{if(document.pointerLockElement!==canvas)return;player.angle+=e.movementX*.0025;player.pitch=Math.max(-.42,Math.min(.42,player.pitch+e.movementY*.0018));});
+addEventListener('keydown',e=>{keys.add(e.code);if(e.code.startsWith('Shift'))running=true;if(e.code==='Escape'&&!isTouch)startEl.style.display='grid';});
+addEventListener('keyup',e=>{keys.delete(e.code);if(e.code.startsWith('Shift'))running=false;});
+
+const joystick=document.getElementById('joystick'),stick=document.getElementById('stick');let joyId=null,jcx=0,jcy=0;
+function moveJoy(e){const dx=e.clientX-jcx,dy=e.clientY-jcy,max=37,l=Math.hypot(dx,dy)||1,k=Math.min(1,max/l),px=dx*k,py=dy*k;joyX=px/max;joyY=py/max;stick.style.transform=`translate(${px}px,${py}px)`;}
+joystick.addEventListener('pointerdown',e=>{joyId=e.pointerId;joystick.setPointerCapture(e.pointerId);const r=joystick.getBoundingClientRect();jcx=r.left+r.width/2;jcy=r.top+r.height/2;moveJoy(e);});
+joystick.addEventListener('pointermove',e=>{if(e.pointerId===joyId)moveJoy(e);});
+function joyUp(e){if(e.pointerId!==joyId)return;joyId=null;joyX=joyY=0;stick.style.transform='';}
+joystick.addEventListener('pointerup',joyUp);joystick.addEventListener('pointercancel',joyUp);
+const look=document.getElementById('lookZone');let lookId=null,lx=0,ly=0;
+look.addEventListener('pointerdown',e=>{lookId=e.pointerId;lx=e.clientX;ly=e.clientY;look.setPointerCapture(e.pointerId);});
+look.addEventListener('pointermove',e=>{if(e.pointerId!==lookId)return;const dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;player.angle+=dx*.0062;player.pitch=Math.max(-.42,Math.min(.42,player.pitch+dy*.0042));});
+look.addEventListener('pointerup',e=>{if(e.pointerId===lookId)lookId=null;});look.addEventListener('pointercancel',e=>{if(e.pointerId===lookId)lookId=null;});
+const run=document.getElementById('run');run.addEventListener('pointerdown',e=>{e.preventDefault();running=true;run.setPointerCapture(e.pointerId);});run.addEventListener('pointerup',()=>running=false);run.addEventListener('pointercancel',()=>running=false);
+
+function frame(now){requestAnimationFrame(frame);const dt=Math.min(.04,(now-last)/1000);last=now;if(active)update(dt);render(now);drawMini();fpsCount++;if(now-fpsClock>1000){fpsEl.textContent=fpsCount+' fps';fpsCount=0;fpsClock=now;}}
+updatePlace();requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
